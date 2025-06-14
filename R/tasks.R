@@ -63,6 +63,7 @@ gen_CR <- function(type, nPoints = 100, r0 = 1, dr = 0.1, sdDev = 0.1) {
 #' @param r0 radius of the enter circle
 #' @param dr half of the distance between two circles in the ring
 #' @param sdDev measures the closeness of points to original shapes
+#' @export
 tsk_CvsR <- function(N=100, nPoints = 100, r0 = 1, dr = 0.1, sdDev = 0.1) {
   pb = progress::progress_bar$new(total = N)
   typeList = sample( c(1, 2), N, replace = TRUE)
