@@ -1,0 +1,88 @@
+---
+title: "Test"
+output: html_document
+date: "2025-06-14"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+remove.packages("mlr3tdavec")
+devtools::install_github("ALuchinsky/mlr3tdavec", INSTALL_opts="--no-staged-install")
+```
+
+
+```{r}
+library(mlr3tdavec)
+```
+
+```{r}
+library(TDAvec)
+library(R6)
+library(mlr3)
+library(mlr3pipelines)
+library(mlr3misc)
+library(mlr3learners)
+library(paradox)
+library(mlr3viz)
+library(mlr3tuning)
+library(TDA)
+library(data.table)
+```
+
+
+```{r}
+named_union = function(x, y) set_names(union(x, y), union(names(x), names(y)))
+mlr_reflections$task_feature_types = named_union(mlr_reflections$task_feature_types, c(list="list"))
+```
+
+
+```{r}
+T = tsk_ellipse()
+```
+
+
+```{r}
+par(mfrow = c(2,2))
+for(i in 1:4) {
+  plot(T$data()$X[[i]], main = T$data()$r[i], asp=1, xlab=NA, ylab=NA);
+  abline(h=0, v=0); grid()
+}
+```
+
+```{r}
+po = PipeOpTDA_PD$new()
+PD = po$train(list(T))$output
+```
+
+
+```{r}
+par(mfrow = c(2,2))
+for(i in 1:4) {plot.diagram(PD$data()$PD[[i]], main = PD$data()$r[i]) }
+```
+
+```{r}
+po2 = PipeOpTDAVec$new("PL")
+po2$param_set$set_values(homDim = 1, nGrid = 20, vectName = "BC")
+T = po2$train( list(PD))$output
+names(T$data())
+```
+
+```{r}
+library(magrittr)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+
+```{r}
+T$data() %>% head(4) %>% 
+  select(r, starts_with("PL")) %>%
+  pivot_longer(cols = starts_with("PL")) %>% 
+  mutate(t=as.numeric(gsub("PL.V","", name)), r = factor(round(r, 3))) %>% 
+  ggplot(aes(x=t, y=value)) + geom_line() + ylab(po$param_set$values$vectName) + facet_wrap(~r)
+```
+
