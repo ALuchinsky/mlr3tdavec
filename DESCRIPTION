@@ -12,5 +12,14 @@ RoxygenNote: 7.3.2
 Imports:
   data.table (>= 1.0.5),
   mlr3 (>= 0.23.0),
-  mlr3misc (>= 0.16.0)
+  mlr3misc (>= 0.16.0),
+  TDAvec,
+  R6,
+  mlr3pipelines,
+  mlr3learners,
+  paradox,
+  mlr3viz,
+  mlr3tuning,
+  TDA
+
   
