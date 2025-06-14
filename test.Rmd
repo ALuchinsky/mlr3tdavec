@@ -63,6 +63,8 @@ par(mfrow = c(2,2))
 for(i in 1:4) {plot.diagram(PD$data()$PD[[i]], main = PD$data()$r[i]) }
 ```
 
+
+
 ```{r}
 po2 = PipeOpTDAVec$new("PL")
 po2$param_set$set_values(homDim = 1, nGrid = 20, vectName = "BC")
