@@ -8,6 +8,7 @@ library(paradox)
 library(mlr3viz)
 library(mlr3tuning)
 library(TDA)
+library(data.table)
 
 make_clear_PD <- function(X, maxdimension = 1, maxscale = 2) {
   PD = ripsDiag(X, maxdimension = 1, maxscale = 2)$diagram
