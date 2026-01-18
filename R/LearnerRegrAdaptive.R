@@ -77,12 +77,23 @@ LearnerRegrAdaptive = R6::R6Class(
 
     .train = function(out) {
       F <- private$.createF(out)
-      target_name = out$target_names[1]
-      target = as.numeric(out$data()[, target_name[[1]], with = FALSE])
-      self$state$history_ =  c()
-      private$.computeLoss( runif(dim(F)[3]), Loss = 0, nIter = 1, maxIter = 100, relTol = 0.001,
-                            Ftrain = F, rtrain = target, lambda = self$param_set$values$lambda, R = diag(dim(F)[2]+1))
-      fit = self$state$history_[[ length(self$state$history_)]]
+      storage.mode(F) <- "double"
+
+      target_name <- out$target_names[1]
+      data <- out$data()
+      target <- as.numeric(data[[target_name]])
+
+      self$state$history_ <- list()
+
+      private$.computeLoss(
+        runif(dim(F)[3]),
+        Loss = 0, nIter = 1, maxIter = 100, relTol = 0.001,
+        Ftrain = F, rtrain = target,
+        lambda = self$param_set$values$lambda,
+        R = diag(dim(F)[2] + 1)
+      )
+
+      fit <- self$state$history_[[length(self$state$history_)]]
       invisible(fit)
     },
 
