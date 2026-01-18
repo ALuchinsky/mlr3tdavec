@@ -1,0 +1,337 @@
+---
+title: "mlr3tdavec"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+vignette: >
+  %\VignetteIndexEntry{mlr3tdavec}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+suppressPackageStartupMessages(library(mlr3tdavec))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(TDA))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(paradox))
+suppressPackageStartupMessages(library(mlr3tuning))
+suppressPackageStartupMessages(library(tidyr))
+suppressPackageStartupMessages(library(mlr3pipelines))
+```
+
+# Regression: Ellipse
+
+## Simple model
+
+Let me first create a simple toy problem: collection of point clouds scattered around squzzed ellipses
+
+```{r}
+set.seed(123)
+task = tsk_ellipse()
+task
+```
+
+Here is how they look like
+
+
+
+
+```{r fig.height=5, fig.width=5}
+data = task$data()
+df = data.table()
+for(i in 1:4) {
+  df = rbind(df, data.frame(X = data$X[[i]], r=data$r[i]))
+}
+df %>% mutate(r=factor(round(r,3))) %>%
+  ggplot(aes(x=X.1, y=X.2)) + geom_point() + geom_hline(yintercept = 0) + geom_vline(xintercept = 0) + 
+  theme(aspect.ratio = 1) + facet_wrap(~r)
+```
+
+
+
+Next step is to create persistence diagrams. This is done with `PipeOpTDA_PD` pipeline operator:
+
+```{r}
+po = PipeOpTDA_PD$new()
+PD = po$train( list(task))$output
+names(PD$data())
+```
+
+
+As you can see, new field is added, with persistence diagrams
+
+Here is the plot of first 4 of them
+
+
+
+```{r fig.height=5, fig.width=5}
+data = PD$data()
+par(mfrow = c(2,2), mar=c(1,1,1,1))
+for(i in 1:4) {
+  plot.diagram(data$PD[[i]], main = paste("r=", round(data$r[i], 2)))
+}
+```
+
+
+
+Next step is to do the vectorization. This is done with `PipeOpTDAVec` pipelone operation
+
+```{r}
+po = PipeOpTDAVec$new()
+po$param_set$set_values(homDim = 1, nGrid = 20, vectName = "BC")
+T = po$train( list(PD))$output
+names(T$data())
+```
+
+Now in addition to point cluds and persistence diagrams for each data entry we have values of vectorization predictors
+
+Here are plots of the first four of them
+
+```{r fig.height=7, fig.width=7}
+T$data() %>% head(4) %>% 
+  select(r, starts_with("custom")) %>%
+  pivot_longer(cols = starts_with("custom")) %>% 
+  mutate(t=as.numeric(gsub("custom.V","", name)), r = factor(round(r, 3))) %>% 
+  ggplot(aes(x=t, y=value)) + geom_line() + ylab(po$param_set$values$vectName) + facet_wrap(~r)
+
+```
+
+Let me finally do the ML job, trying to predict the squeze ration $r$ from extracted vectorization
+
+```{r}
+# removing extra features
+T$select(cols = setdiff(T$feature_names, c("PD", "X")))
+#
+split = partition(T, ratio = 0.8)
+learner = lrn("regr.lm")
+learner$train(T, split$train)
+```
+
+Model is trained on the training subset, here are predictions on test subset
+
+```{r fig.height=5, fig.width=5}
+preds = learner$predict(T, split$test)
+R2 = preds$score(msr("regr.rsq"))
+title = paste("R2=", round(R2, 3), ", homDim = ", po$param_set$values$homDim, ", nGrid = ", po$param_set$values$nGrid)
+autoplot(preds) + ggtitle(title)
+```
+
+As you can see, the results are nice
+
+```{r}
+knitr::knit_exit()
+```
+
+### Graph Model
+
+Vectorization and modelling steps can be joined into one graph:
+
+Prepare the pipeline: vectorize, remove all extra fields, use LM to predict
+
+```{r}
+po_tda = PipeOpTDAVec$new()
+po_select = po("select")
+po_select$param_set$values$selector = selector_type("numeric")
+graph = po_tda %>>% po_select %>>% lrn("regr.lm")
+graph$plot()
+```
+
+You can create a learner object from this graph, chnge its parameters, use it as usual MLR3 learner:
+
+```{r}
+gl = as_learner(graph)
+gl$param_set$set_values(custom.homDim = 1, custom.nGrid = 20, custom.vectName = "BC")
+gl
+```
+
+This this learner can be easily trained and used for predictions
+
+```{r}
+split = partition(PD, ratio = 0.8)
+gl$train(PD, row_ids = split$train)
+pr = gl$predict(PD, row_ids = split$test)
+```
+
+Here are the result:
+
+```{r}
+R2 = pr$score(msr("regr.rsq"))
+title = paste("R2=", round(R2, 3), 
+              ", homDim = ", gl$param_set$values$custom.homDim, 
+              ", nGrid = ", gl$param_set$values$custom.nGrid)
+
+ autoplot(pr) + ggtitle(title)
+```
+
+
+It is very easy to change parameters of the leaner:
+
+```{r}
+gl$param_set$set_values(custom.homDim = 0, custom.nGrid = 20, custom.vectName = "BC")
+gl$train(PD, row_ids = split$train)
+pr = gl$predict(PD, row_ids = split$test)
+autoplot(pr) + ggtitle(paste0("R2=", pr$score(msr("regr.rsq")) %>% round(2)))
+
+```
+
+As expected, dimension 0 predictors are much less informative and generate bad model
+
+### Gird Search Tuning
+
+We can use all ML3 power to get optimal values of hyper-parameters (homDim, vectorization method, numer of points)
+
+Learner to use:
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+po_tda = PipeOpTDAVec$new()
+po_select = po("select")
+po_select$param_set$values$selector = selector_type("numeric")
+
+graph = po_tda %>>% po_select %>>% lrn("regr.lm")
+gl = as_learner(graph)
+```
+
+
+What are possible values o hyperparameters to check:
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+search_space = ParamSet$new(params = list(
+  custom.homDim = p_int(lower = 0, upper = 1),
+  custom.nGrid = p_int(lower = 10, upper = 20),
+  custom.vectName = p_fct(c("PS", "PL", "BC"))
+))
+```
+
+AutoTuner with the specified properties
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+at = AutoTuner$new(
+  learner = gl,
+  resampling = rsmp("cv", folds = 3),
+  measure = msr("regr.rmse"),
+  search_space = search_space,
+  terminator = trm("evals", n_evals = 100),
+  tuner = tnr("random_search")
+)
+```
+
+And now we run it! 
+
+It takes some time and produces lots of report messages, to I suppress the output
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+start_time = Sys.time()
+out = capture.output(
+  A <- at$train(PD)
+)
+difftime(Sys.time(), start_time)
+```
+
+Here are the results:
+* homDim = 1 is better
+* BC vectorization is better
+* smaller grid is better
+
+```{r}
+at_data = at$archive$data
+at_data %>% 
+  filter(regr.rmse < 0.2) %>% 
+  ggplot(aes(x=custom.nGrid, y=regr.rmse, colour = custom.vectName)) + geom_line() + geom_point() + facet_wrap(~custom.homDim) 
+```
+
+
+
+Now we have the best model:
+
+```{r}
+best_result = at$archive$data[ which.min(at$archive$data$regr.rmse)]
+best_result$custom.homDim
+best_result$custom.nGrid
+best_result$custom.vectName
+best_result$regr.rmse
+```
+
+Here are the predictions
+
+```{r}
+learner = at$model$learner
+split = partition(PD, ratio = 0.8)
+learner$train(PD, row_ids = split$train)
+pr = learner$predict(PD, row_ids = split$test)
+title = paste("RMSE=", round(pr$score(msr("regr.rmse")), 3), " R2=", round(pr$score(msr("regr.rsq")),2))
+autoplot(pr) + ggtitle(title)
+
+```
+
+
+
+## Combining Two Vectorizations
+
+```{r}
+po_pd = PipeOpTDA_PD$new()
+PD = po_pd$train( list(task))$output
+names(PD$data())
+```
+
+
+
+```{r}
+po_tda_BC = PipeOpTDAVec$new(id="BC", vectName = "PS", homDim = 1, nGrid = 10)
+po_tda_PL = PipeOpTDAVec$new(id="PL", vectName = "PL", homDim = 1, nGrid = 10)
+# gBC = po_tda_BC %>>% po_select
+g_comb = gunion(list(po_tda_BC, po_tda_PL)) %>>% po("featureunion")
+g_comb$plot(horizontal = TRUE)
+```
+
+With this graph both predictors are combined:
+
+```{r}
+out = g_comb$train(PD)$featureunion.output
+out
+```
+We can create a simple model that uses all these features as predictors:
+
+```{r}
+gr = gunion(list(po_tda_BC, po_tda_PL)) %>>% po("featureunion") %>>% po_select %>>% lrn("regr.lm")
+gr$plot(horizontal = TRUE)
+```
+
+It is learned and tested in a standard way:
+
+```{r}
+model = as_learner(gr)
+model$train(PD)
+preds = model$predict(PD)
+autoplot(preds) + ggtitle(preds$score(msr("regr.rsq")))
+```
+
+Alternatively, you use these two predictors using the adaptive iterative model. The required changes are minimal:
+
+```{r}
+gr = gunion(list(po_tda_BC, po_tda_PL)) %>>% po("featureunion") %>>% po_select %>>% LearnerRegrAdaptive$new()
+model_adapt = as_learner(gr)
+model_adapt$train(PD)
+preds_adapt = model_adapt$predict(PD)
+autoplot(preds_adapt)  + ggtitle(preds_adapt$score(msr("regr.rsq")))
+```
+
+As you can see, this model is slightly more precise.
+
+Here is a plot of the loss history:
+
+```{r}
+hist_ = model_adapt$model$regr.my$history_
+plot(sapply(hist_, function(h) h$loss))
+```
+
+
+
