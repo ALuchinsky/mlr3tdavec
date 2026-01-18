@@ -78,7 +78,7 @@ LearnerRegrAdaptive = R6::R6Class(
     .train = function(out) {
       F <- private$.createF(out)
       target_name = out$target_names[1]
-      target = as.numeric(out$data()[, target_name, with = FALSE])
+      target = as.numeric(out$data()[, target_name, with = FALSE][[1]])
       self$state$history_ =  c()
       private$.computeLoss( runif(dim(F)[3]), Loss = 0, nIter = 1, maxIter = 100, relTol = 0.001,
                             Ftrain = F, rtrain = target, lambda = self$param_set$values$lambda, R = diag(dim(F)[2]+1))
