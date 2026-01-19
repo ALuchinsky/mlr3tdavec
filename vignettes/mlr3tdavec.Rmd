@@ -26,6 +26,8 @@ suppressPackageStartupMessages(library(paradox))
 suppressPackageStartupMessages(library(mlr3tuning))
 suppressPackageStartupMessages(library(tidyr))
 suppressPackageStartupMessages(library(mlr3pipelines))
+suppressPackageStartupMessages(library(mlr3learners))
+suppressPackageStartupMessages(library(mlr3viz))
 ```
 
 # Regression: Ellipse
