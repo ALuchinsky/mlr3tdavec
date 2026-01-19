@@ -41,10 +41,10 @@ make_clear_PD <- function(X, maxdimension = 1, maxscale = 2) {
   return(PD)
 }
 
-tsk_ellipse <- function(N=100, sdDev = 0.1) {
+tsk_ellipse <- function(N=100, sdDev = 0.1, nSize = 100) {
   rList = stats::runif(N)
   data <- data.table::data.table(r=rList)
-  data$X = lapply(rList, gen_ellipse, sdDev = sdDev)
+  data$X = lapply(rList, gen_ellipse, sdDev = sdDev, nSize = nSize)
   task = mlr3::as_task_regr(data, target = "r")
   task$characteristics = list(sdDev = sdDev)
   return(task)
