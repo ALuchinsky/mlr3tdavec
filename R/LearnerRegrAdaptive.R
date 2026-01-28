@@ -1,9 +1,9 @@
 LearnerRegrAdaptive = R6::R6Class(
   "LearnerRegrMy",
   inherit = LearnerRegr,
-
   public = list(
-    initialize = function(lambda = 0) {
+    debug_print = FALSE,
+    initialize = function(lambda = 0, debug_print = FALSE) {
       ps = ps(
         lambda = paradox::p_dbl(lower = 0, upper = 10, default = 0)
         # add hyperparameters here (paradox 1.0.1 style)
@@ -11,6 +11,9 @@ LearnerRegrAdaptive = R6::R6Class(
       )
       if(!is.null(lambda)) {
         ps$values$lambda = lambda
+      }
+      if(!is.null(debug_print)) {
+        self$debug_print = debug_print
       }
       super$initialize(
         id = "regr.my",
@@ -34,10 +37,11 @@ LearnerRegrAdaptive = R6::R6Class(
       for(cl in classes) {
         cols_ = names(fea_data)[startsWith(names(fea_data), cl)]
         XX = fea_data[,cols_, with = FALSE]
-        keep <- apply(XX, 2, function(col) length(unique(col)) > 1)
+        keep <- apply(XX, 2, function(col) length(unique(col)) > 0)
         data_list[cl] <- list(as.matrix(XX[, keep, drop = FALSE, with = FALSE]))
       }
       dims = c(nrow(data_list[[1]]), max(sapply(data_list, ncol)), length(data_list))
+      # cat("createF: dims=", dims, "\n")
       F = array(0, dims)
       for(j in seq_along(data_list)) {
         D = data_list[[j]]
@@ -47,11 +51,12 @@ LearnerRegrAdaptive = R6::R6Class(
     },
 
     .computeLoss = function(par,Loss=0,nIter=1,maxIter=100,relTol=0.001,lambda, Ftrain,rtrain,R){
-      par = par/sum(abs(par))
+      # if (self$debug_print)
+        # cat("Iter:", nIter, "par = ", par, " Loss:", Loss, "\n")
       dims <- dim(Ftrain)
       X <- matrix(1,nrow = dims[1],ncol=dims[2]+1)
       for (m in 1:dims[2]) X[,m+1] <- Ftrain[,m,]%*%par
-      betaHat <- solve(t(X)%*%X+lambda*R)%*%t(X)%*%rtrain
+      betaHat <- MASS::ginv(t(X)%*%X+lambda*R)%*%t(X)%*%rtrain
       yHat <- X %*% betaHat
 
       C <- crossprod(t(betaHat[-1]))
@@ -60,7 +65,7 @@ LearnerRegrAdaptive = R6::R6Class(
 
       Z <- matrix(nrow = dims[1],ncol = dims[3])
       for (j in 1:dims[3]) Z[,j] <- Ftrain[,,j]%*%betaHat[-1]
-      gammaHat <- solve(t(Z)%*%Z)%*%t(Z)%*%(rtrain-betaHat[1])
+      gammaHat <- MASS::ginv(t(Z)%*%Z)%*%t(Z)%*%(rtrain-betaHat[1])
 
       h = list(gammaHat = gammaHat, betaHat = betaHat, loss = LossUpd)
       self$state$history_ <- append(self$state$history_, list(h))
@@ -78,6 +83,7 @@ LearnerRegrAdaptive = R6::R6Class(
     .train = function(out) {
       F <- private$.createF(out)
       storage.mode(F) <- "double"
+      # cat("train: dim(F)=", dim(F), "\n")
 
       target_name <- out$target_names[1]
       data <- out$data()
@@ -100,8 +106,10 @@ LearnerRegrAdaptive = R6::R6Class(
     .predict = function(task) {
       Ftrain <- private$.createF(task)
       dims = dim(Ftrain)
+      # cat("predict: dims=", dims, "\n")
       X <- matrix(1,nrow = dims[1],ncol=dims[2]+1)
       for (m in 1:dims[2]) X[,m+1] <- Ftrain[,m,] %*% self$model$gammaHat
+      # cat("predict: |X|=", dim(X), " |beta|=", length(self$model$betaHat), "\n" )
       yHat <- X %*% self$model$betaHat
       PredictionRegr$new(task = task, response = as.numeric(yHat))
     }
