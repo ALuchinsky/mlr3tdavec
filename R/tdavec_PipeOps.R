@@ -174,7 +174,7 @@ PipeOpTDAVec = R6::R6Class("PipeOpTDAVec",
                            ps = paradox::ParamSet$new(params = list(
                               homDim = paradox::p_int(lower = 0, upper = 1),
                               nGrid = paradox::p_int(lower = 3, upper = 200),
-                              vectName = paradox::p_fct(c("PL", "PS", "BC", "FDA")),
+                              vectName = paradox::p_fct(c("PL", "PS", "BC", "FDA", "Stats")),
                               K=paradox::p_int(lower = 1, upper = 100),
                               w=paradox::p_int(lower=0, upper = 5)
                            ))
@@ -267,7 +267,11 @@ PipeOpTDAVec = R6::R6Class("PipeOpTDAVec",
                            pds = task$data(cols = self$pdsName)[[1]]
                            if(self$param_set$values$vectName =="FDA") {
                              TT = private$.generateForierFdata(pds, homDim = homDim, K=self$param_set$values$K, w=self$param_set$values$w)
-                           } else {
+                           }
+                           else if((self$param_set$values$vectName =="Stats")) {
+                             TT = t(sapply(pds, TDAvec::computeStats, homDim = homDim))
+                           }
+                           else {
                              func = switch (self$param_set$values$vectName,
                                             "PL" = TDAvec::computePersistenceLandscape,
                                             "PS" = TDAvec::computePersistenceSilhouette,
